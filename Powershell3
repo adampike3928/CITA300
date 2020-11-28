@@ -1,0 +1,131 @@
+#Importing AD module for AD cmd
+Import-Module activedirectory
+
+#stores data from ADUsers goes to $ADUsers varable
+$ADUsers = import-csv "C:\Users\pike860\Desktop\CITA300PS\BulkUsers2.csv"
+#"C:\Users\pike860\Desktop\CITA300PS\BulkUsers2.csv"
+
+#Loop for each user entered
+foreach ($User in $ADUsers)
+{
+    $Firstname = $User.firstname
+    $Lastname = $User.lastname
+    $Username = $User.username
+    $OU = $User.ou
+    $Email = $User.email
+    $Streetadress = $User.streetadress
+    $City = $User.city
+    $Postalcode = $User.postalcode
+    $State = $User.state
+    $Country = $User.country
+    $Telephone = $User.telephone
+    $JobTitle= $User.jobtitle
+    $Company = $User.company
+    $Department = $User.Department
+    $Password = $User.password
+    $SP = ConvertTo-SecureString -String $Password -AsPlainText -Force
+
+    
+    #Seeing if user already exist
+    if (Get-ADUser -F {SameAccountName -eq $Username})
+    {
+        #Warning if user exist 
+        Write-Warning "An account named username $Username already exist."
+    }
+    else
+    {
+        New-ADUser 
+            -SameAccountName $Username
+            -UserPrincipalName "$Username@pike.local"
+            -Name "$Firstname $Lastname"
+            -GivenName $Firstname
+            -Surname $Lastname
+            -Enable $True
+            -DisplayName "$Lastname, $Firstname"
+            -Path $OU
+            -Email $Email
+            -StreetAdress $Streetadress
+            -City $City
+            -PostalCode $Postalcode
+            -State $State
+            -Country $Country
+            -Telephone $Telephone
+            -JobTitle $JobTitle
+            -Comapny $Company
+            -Department $Department
+            -AccountPassword $SP
+        
+    }
+
+    $DirectoryToCreate ="C:\Parent-Directory\$Userbame\"
+    if (-not (Test-Path -LiteralPath $DirectoryToCreate))
+    {
+        try 
+        {
+            New-Iteam -Path $DirectoryToCreate -IteamType Directory -ErrorAction Stop | Out-Null 
+        }
+        catch
+        {
+            Write-Error -Message "Unable to create directory '$DirectoryToCreate' . Error was: $_" -ErrorAction Stop
+        }
+        "Directory Created '$DirectoryToCreate'."
+    }
+    else
+    {
+        "Directory already existed for $Username"   
+    }
+
+    $SMBToCreate = "C:\Parent-Directory\$Username\"
+    
+    if (!(Get-SMBShare -Name $Username -ea 0))
+    {
+        New-SmbShare -Name $Username -Path $SMBToCreate -FullAccess "done\Administrator","pike\domain admins" -Readaccess "pike\$Username"
+    
+    }
+                                                 #Assignment 2
+    if ($null -eq(Get-PSSnapin -Name MailEnable.Provision.Command .ErrorAction SilentlyContinue))
+    {
+        Add-PsSnapin MailEnable.Provision.Command
+    }
+    New-MailEnableMailbox -Mailbox "$Username" -Domain "pike.local" -Password "$Password" -Right "USER"
+
+    #Write Text File
+    Write-Output $Username
+    $Lable1 = "***Username***"
+    $Lable2 = $Username
+    $Lable1 >> c:\test.txt
+    $Lable2 >> c:\test.txt
+    $ErrorActionPreference = "SilentlyContinue"
+    
+    Write-Output $Password
+    $Lable3 = "***Password***"
+    $Lable4 = $Password
+    $Lable3 >> c:\test.txt
+    $Lable4 >> c:\test.txt
+    $ErrorActionPreference ="SilentlyContinue"
+
+    $gmailCred = Get-Credential
+    $SendMailParams = @{
+        From = 'pike860@pike.local'
+        To = 'pike860@pike.local'
+        Subject = 'Some subject'
+        Body = 'some body'
+        SMTPServer = 'pike.local'
+        SMTPPort = 25
+        UseSsl = $false
+        Credential = $gmailCred
+
+    }
+    Send-MailMessage @SendMailParams
+    & "C:\Program Files (x86)\Mail Enable \Bin\MESend.exe" /F:pike860@pike.local /T:$Username@pike.local /S:New Mailbox Created /A:C:\Welcome.txt /N:Welcome.txt /B:Welcome to
+
+    & "C:\Program Files (x86)\Mail Enable \Bin\MESend.exe" /F:pike860@pike.local /T:pike860@pike.local /S:BULK USER IMPORT /A:C:\test.txt /N:.txt /B:BULK User import. /H:127.0.0.1
+
+
+
+
+
+
+} 
+$filterdate = (Get-Date).AddDays(-1).Date
+Get-ADUser -Filter {created -ge $filterdate} -Properties created | Select-Object Name,Created | Sort-Object created -Descending
